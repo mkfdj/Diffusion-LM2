@@ -6,6 +6,7 @@ import argparse
 import os, json
 import torch as th
 import numpy as np
+import torch_xla.core.xla_model as xm
 import torch.distributed as dist
 
 from improved_diffusion import dist_util, logger
@@ -158,11 +159,11 @@ def run_bpd_evaluation(model, diffusion, data, num_samples, clip_denoised, args,
         batch, model_kwargs = next(data)
         batch = batch.to(dist_util.dev())
         model_kwargs = {k: v.to(dist_util.dev()) for k, v in model_kwargs.items()}
-        model_kwargs['mapping_func'] = partial(compute_logp, args, model3.cuda())
+        model_kwargs['mapping_func'] = partial(compute_logp, args, model3.to(xm.xla_device()))
         minibatch_metrics = diffusion.calc_bpd_loop(
             model, batch, clip_denoised=clip_denoised, model_kwargs=model_kwargs,
             # denoised_fn=None,
-            denoised_fn=partial(denoised_fn_round, args, model3.cuda()) if args.clamp == 'clamp' else None,
+            denoised_fn=partial(denoised_fn_round, args, model3.to(xm.xla_device())) if args.clamp == 'clamp' else None,
         )
 
         for key, term_list in all_metrics.items():
