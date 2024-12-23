@@ -3,6 +3,7 @@ Generate a large batch of image samples from a model and save them as a large
 numpy array. This can be used to produce samples for FID evaluation.
 """
 
+import torch_xla.core.xla_model as xm
 import argparse
 import os, json, sys
 import stanza
@@ -145,7 +146,7 @@ def main():
                 encoded_partial_seq[0][args.tgt_len] = tokens2id['END']
 
             if args.eval_task_ == 'control_attribute':
-                model_control = Classifier_GPT2.from_pretrained('predictability/diff_models/e2e-back_e=6_b=10_m=gpt2_wikitext-103-raw-v1_101_wp_full_multi16_t_aware').cuda()
+                model_control = Classifier_GPT2.from_pretrained('predictability/diff_models/e2e-back_e=6_b=10_m=gpt2_wikitext-103-raw-v1_101_wp_full_multi16_t_aware').to(xm.xla_device())
 
                 control_label_lst = []
                 with open('diffusion_lm/improved-diffusion/control_gen/target_attribute.json', 'r') as controlf:
@@ -158,7 +159,7 @@ def main():
                     label = [-100] * 64 + [tokens2id.get(x, tokens2id['UNK']) for x in label_class]
                     label_ids = th.tensor(label).unsqueeze(0)
                     debug_lst = []
-                    langevin_fn_selected = partial(langevin_fn3, debug_lst, model_control, model3.cuda(),
+                    langevin_fn_selected = partial(langevin_fn3, debug_lst, model_control, model3.to(xm.xla_device()),
                                                    label_ids.expand(args.batch_size, -1), 0.1)
                     control_constraints.append((langevin_fn_selected, label_class))
 
@@ -200,7 +201,7 @@ def main():
             if args.eval_task_ == 'control_attribute_compose':
                 model_control = Classifier_GPT2.from_pretrained('predictability/diff_models/e2e-bac'
                                                                 'k_e=6_b=10_m=gpt2_wikitext-103-raw-v1_101_wp_'
-                                                                'full_multi16_t_aware').cuda()
+                                                                'full_multi16_t_aware').to(xm.xla_device())
                 label_ids_lst = []
 
                 label_class = ['price', ':', 'none']
@@ -229,17 +230,17 @@ def main():
                 label_class1 = ['price', ':', 'less', 'than', '£', '20']  # 90%
                 for label_class in [label_class1, label_class2]:
                     label = [-100] * encoded_partial_seq[0].size(0) + [tokens2id[x] for x in label_class]
-                    label_ids = th.tensor(label).unsqueeze(0).cuda()
+                    label_ids = th.tensor(label).unsqueeze(0).to(xm.xla_device())
                     label_ids_lst.append(label_ids)
 
                 debug_lst = []
-                langevin_fn_selected = partial(langevin_fn3_compose, debug_lst, model_control, model3.cuda(),
+                langevin_fn_selected = partial(langevin_fn3_compose, debug_lst, model_control, model3.to(xm.xla_device()),
                                                [label_ids.expand(args.batch_size, -1) for label_ids in label_ids_lst],
                                                0.1)
 
             elif args.eval_task_ == 'control_pos':
                 model_control = Classifier_POS.from_pretrained('predictability/diff_models/e2e-tgt-pos_e=6_b=10_m=bert-'
-                                                               'base-uncased_wikitext-103-raw-v1_101_wp_full_multi16_v2').cuda()
+                                                               'base-uncased_wikitext-103-raw-v1_101_wp_full_multi16_v2').to(xm.xla_device())
 
 
                 pos_vocab = {'START': 0, 'END': 1, 'UNK': 2, 'PAD': 3}
@@ -265,7 +266,7 @@ def main():
                     label_class = label_class + [pos_vocab['PAD']] * (64 - len(label_class))
                     label_ids = th.LongTensor(label_class).unsqueeze(0)
                     debug_lst = []
-                    langevin_fn_selected = partial(langevin_fn4, debug_lst, model_control, model3.cuda(),
+                    langevin_fn_selected = partial(langevin_fn4, debug_lst, model_control, model3.to(xm.xla_device()),
                                                    label_ids.expand(args.batch_size, -1),
                                                    0.1)
                     control_constraints.append((langevin_fn_selected, label_class_dict['pos']))
@@ -315,7 +316,7 @@ def main():
                 #     'wikitext-103-raw-v1_101_wp_full_multi16_v2').cuda()
                 model_control = Classifier_Tree.from_pretrained(
                     'predictability/diff_models/e2e-tgt-tree_e=20_b=32_m=bert-base-uncased_'
-                    'wikitext-103-raw-v1_101_wp_full_multi16_cat').cuda()
+                    'wikitext-103-raw-v1_101_wp_full_multi16_cat').to(xm.xla_device())
 
                 # print(model_control)
 
@@ -337,7 +338,7 @@ def main():
                     padded_chart = th.LongTensor(label_class_dict['padded_chart'])
                     words_ = label_class_dict['words_']
                     label_ids = padded_chart
-                    langevin_fn_selected = partial(langevin_fn_tree, 0.0005, model_control, model3.cuda(),
+                    langevin_fn_selected = partial(langevin_fn_tree, 0.0005, model_control, model3.to(xm.xla_device()),
                                                    label_ids.expand(args.batch_size, -1, -1),
                                                    0.1)
                     control_constraints.append((langevin_fn_selected, [label_class_dict['tree']]))
@@ -351,7 +352,7 @@ def main():
             elif args.eval_task_ == 'control_span':
                 model_control = Classifier_Tree.from_pretrained(
                     'predictability/diff_models/e2e-tgt-tree_e=20_b=32_m=bert-base-uncased_'
-                    'wikitext-103-raw-v1_101_wp_full_multi16_cat').cuda()
+                    'wikitext-103-raw-v1_101_wp_full_multi16_cat').to(xm.xla_device())
 
                 import benepar
                 from tree_helper import chart_from_tree, pad_charts, padded_chart_from_spans
@@ -375,7 +376,7 @@ def main():
                     padded_charts = th.LongTensor(padded_charts).unsqueeze(0)
                     print(padded_charts.shape, 'built from spans. ')
                     label_ids = padded_charts
-                    langevin_fn_selected = partial(langevin_fn_tree, 0.1, model_control, model3.cuda(),
+                    langevin_fn_selected = partial(langevin_fn_tree, 0.1, model_control, model3.to(xm.xla_device()),
                                                    label_ids.expand(args.batch_size, -1, -1),
                                                    0.1)
                     print((str(label_class_dict['spans'][0]),))
@@ -412,7 +413,7 @@ def main():
                     label = encoded_partial_seq[0]
                     label_ids = th.tensor(label).unsqueeze(0)
                     label_ids = label_ids.masked_fill(label_ids == todo_pad_token, 3)
-                    tgt_embs = model3.cuda()(label_ids.cuda())
+                    tgt_embs = model3.cuda()(label_ids.to(xm.xla_device()))
                     langevin_fn_selected = partial(langevin_fn_length, 0.01, diffusion, partial_mask, model,
                                                    tgt_embs.expand(args.batch_size, -1, -1), 0.1)
                     control_constraints.append((langevin_fn_selected, (str(target_length),)))
@@ -450,7 +451,7 @@ def main():
                 # encoded_seq[encoded_seq == todo_pad_token] = 0
                 encoded_seq.masked_fill_(encoded_seq == todo_pad_token, 3)
 
-                encoded_seq_hidden = model_embs(encoded_seq.cuda())
+                encoded_seq_hidden = model_embs(encoded_seq.to(xm.xla_device()))
                 seqlen = encoded_seq.size(1)
                 if args.model_arch == '1d-unet':
                     encoded_seq_hidden = encoded_seq_hidden.permute(0, 2, 1)
@@ -473,7 +474,7 @@ def main():
                     for sample in loop_func_(
                             model,
                             sample_shape,
-                            denoised_fn=partial(denoised_fn_round, args, model3.cuda()),
+                            denoised_fn=partial(denoised_fn_round, args, model3.to(xm.xla_device())),
                             # denoised_fn=partial(langevin_early, model_control, model3.cuda(),
                             #                     label_ids.expand(args.batch_size, -1), 0.1),
                             clip_denoised=args.clip_denoised,
@@ -491,10 +492,10 @@ def main():
                         with open(f'debug_lst_lgv_{args.notes}.json', 'w') as f:
                             json.dump(debug_lst, f)
                         if  args.eval_task_ == 'control_tree':
-                            label_ids = label_ids.expand(args.batch_size, -1, -1).cuda()
+                            label_ids = label_ids.expand(args.batch_size, -1, -1).to(xm.xla_device())
                             tgt_embs = model3(label_ids[:, final.size(1):])
                         else:
-                            label_ids = label_ids.expand(args.batch_size, -1).cuda()
+                            label_ids = label_ids.expand(args.batch_size, -1).to(xm.xla_device())
                             tgt_embs = model3(label_ids[:, final.size(1):])
 
                         if args.eval_task_ == 'control_attributes':
@@ -579,7 +580,7 @@ def main():
                             sample_shape,
                             encoded_seq_hidden,
                             partial_mask,
-                            denoised_fn=partial(denoised_fn_round, args, model3.cuda()),
+                            denoised_fn=partial(denoised_fn_round, args, model3.to(xm.xla_device())),
                             clip_denoised=args.clip_denoised,
                             model_kwargs=model_kwargs,
                             device=encoded_seq_hidden.device,
@@ -635,7 +636,7 @@ def main():
             if diffusion.training_mode.startswith('e2e'):
                 word_lst_e2e = []
                 print('decoding for e2e', )
-                x_t = th.tensor(arr).cuda()
+                x_t = th.tensor(arr).to(xm.xla_device())
                 print(x_t.shape)
                 if args.model_arch == 'conv-unet':
                     reshaped_x_t = x_t.view(x_t.size(0), -1, x_t.size(-1))
