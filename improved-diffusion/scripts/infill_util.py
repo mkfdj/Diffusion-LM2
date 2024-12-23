@@ -1,4 +1,5 @@
 import torch as th
+import torch_xla.core.xla_model as xm
 
 def get_score(input_embs, label_ids, model_control, t=None):
     label_ids2 = label_ids.clone()
@@ -29,7 +30,7 @@ def langevin_fn3(debug_lst, model_control, model3, label_ids, step_size, sample,
         tt = t[0].item() - 1
     else:
         tt = 200
-    label_ids = label_ids.cuda()
+    label_ids = label_ids..to(xm.xla_device())
     tgt_embs = model3(label_ids[:, sample.size(1):])
 
     label_ids2 = label_ids.clone()
@@ -80,7 +81,7 @@ def langevin_fn4(debug_lst, model_control, model3, label_ids, step_size, sample,
         tt =t[0].item() - 1
     else:
         tt = 200
-    label_ids = label_ids.cuda()
+    label_ids = label_ids..to(xm.xla_device())
     input_embs_param = th.nn.Parameter(sample)
     if False:
         input_embs = th.cat([input_embs_param, tgt_embs], dim=1)
@@ -192,7 +193,7 @@ def langevin_fn_tree(coeff, model_control, model3, label_ids, step_size, sample,
         tt =t[0].item() - 1
     else:
         tt = 200
-    label_ids = label_ids.cuda()
+    label_ids = label_ids..to(xm.xla_device())
     input_embs_param = th.nn.Parameter(sample)
 
     with th.enable_grad():
